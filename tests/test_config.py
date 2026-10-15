@@ -93,3 +93,34 @@ def test_keys_por_agente_vacias_se_ignoran(tmp_path, monkeypatch) -> None:
 
     cfg = load_config(_write_configs(tmp_path))
     assert cfg["openai"]["agent_api_keys"] == {"WESTY": "sk-westy"}
+
+
+# ------------------------------------------------------ workers uvicorn
+
+
+def test_workers_default_es_uno(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 1
+
+
+def test_workers_del_yaml(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 3
+
+
+def test_web_concurrency_pisa_el_yaml(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "4")
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 4
+
+
+def test_web_concurrency_menor_a_uno_se_acota(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "0")
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 1

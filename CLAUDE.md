@@ -112,6 +112,8 @@ El script publica a `org=${UNIVERSITY_CODE}/agents/<agent_id>/` (default `westfi
 
 `ENV=dev` baja el TTL del registry a 30s y activa `reload` de uvicorn.
 
+`WEB_CONCURRENCY` (default 1) levanta N procesos uvicorn ([main_api.py](src/westfield_agent_back_python/main_api.py)); es la palanca de throughput, porque un proceso satura ~1 core alrededor de ~1.100 rpm. Todo el estado es **por proceso** — registry, rate limiter — así que N workers = N cold-loads desde S3 por agente y un rate limit efectivo de hasta N × `RATE_LIMIT_MAX`. Con `ENV=dev` se fuerza 1 worker porque uvicorn no combina `reload` con `workers`. No confundir con `make run-worker` (el worker de fondo, otro proceso).
+
 ## Tests
 
 Ningún test toca AWS ni la red. Todo pasa por [tests/fakes.py](tests/fakes.py):

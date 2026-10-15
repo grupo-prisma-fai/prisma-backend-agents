@@ -102,6 +102,12 @@ def load_config(config_dir: str = "configs") -> dict[str, Any]:
     cfg["service"]["host"] = os.getenv("HOST", cfg["service"].get("host", "0.0.0.0"))
     cfg["service"]["port"] = int(os.getenv("PORT", cfg["service"].get("port", 8000)))
     cfg["service"].setdefault("cors_origins", ["*"])
+    # Procesos uvicorn. WEB_CONCURRENCY es la convención estándar (uvicorn,
+    # gunicorn, Heroku…). Cada worker tiene su propio GIL, así que el techo de
+    # rpm escala con N; ver main_api.py para lo que eso implica.
+    cfg["service"]["workers"] = max(
+        1, int(os.getenv("WEB_CONCURRENCY", cfg["service"].get("workers", 1)))
+    )
 
     # ---- worker ----
     cfg["worker"]["enabled"] = _env_bool(
