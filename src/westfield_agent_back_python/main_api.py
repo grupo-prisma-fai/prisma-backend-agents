@@ -19,8 +19,6 @@ fuerza un solo worker.
 
 from __future__ import annotations
 
-import os
-
 import uvicorn
 
 from westfield_agent_back_python.shared.config import load_config
@@ -31,7 +29,9 @@ log = get_logger("westfield_agent_back_python.main_api")
 
 def main() -> None:
     cfg = load_config()
-    reload = os.getenv("ENV", "dev") == "dev"
+    # project.env ya viene normalizado por load_config: misma fuente de verdad
+    # que elige el <env>.yaml, así ENV=DEV y ENV=dev no divergen.
+    reload = cfg["project"]["env"] == "dev"
     workers = cfg["service"]["workers"]
 
     if reload and workers > 1:

@@ -9,6 +9,7 @@ import pytest
 from westfield_agent_back_python import main_api
 
 CFG: dict[str, Any] = {
+    "project": {"env": "prod"},
     "service": {"host": "127.0.0.1", "port": 8000, "workers": 1},
     "rate_limit": {"max_requests": 12},
 }
@@ -27,13 +28,12 @@ def uvicorn_run(monkeypatch) -> dict[str, Any]:
     return captured
 
 
-def _con_workers(monkeypatch, workers: int) -> None:
-    cfg = {**CFG, "service": {**CFG["service"], "workers": workers}}
+def _con_workers(monkeypatch, workers: int, env: str = "prod") -> None:
+    cfg = {**CFG, "project": {"env": env}, "service": {**CFG["service"], "workers": workers}}
     monkeypatch.setattr(main_api, "load_config", lambda: cfg)
 
 
 def test_prod_levanta_n_workers_sin_reload(monkeypatch, uvicorn_run) -> None:
-    monkeypatch.setenv("ENV", "prod")
     _con_workers(monkeypatch, 4)
 
     main_api.main()
@@ -44,8 +44,7 @@ def test_prod_levanta_n_workers_sin_reload(monkeypatch, uvicorn_run) -> None:
 
 
 def test_dev_fuerza_un_worker_porque_reload_no_admite_varios(monkeypatch, uvicorn_run) -> None:
-    monkeypatch.setenv("ENV", "dev")
-    _con_workers(monkeypatch, 4)
+    _con_workers(monkeypatch, 4, env="dev")
 
     main_api.main()
     assert uvicorn_run["reload"] is True
@@ -53,9 +52,18 @@ def test_dev_fuerza_un_worker_porque_reload_no_admite_varios(monkeypatch, uvicor
 
 
 def test_prod_default_un_worker(monkeypatch, uvicorn_run) -> None:
-    monkeypatch.setenv("ENV", "prod")
     _con_workers(monkeypatch, 1)
 
     main_api.main()
     assert uvicorn_run["workers"] == 1
     assert uvicorn_run["reload"] is False
+
+
+def test_reload_se_decide_con_project_env_no_con_env_crudo(monkeypatch, uvicorn_run) -> None:
+    # Aunque la var cruda diga otra cosa, manda el valor normalizado del config.
+    monkeypatch.setenv("ENV", "DEV")
+    _con_workers(monkeypatch, 2, env="prod")
+
+    main_api.main()
+    assert uvicorn_run["reload"] is False
+    assert uvicorn_run["workers"] == 2
