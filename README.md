@@ -276,6 +276,7 @@ El fallo de un agente **jamás** afecta a otros agentes de la misma instancia.
 | `ENV` | `dev` | `dev` o `prod` → carga `configs/<env>.yaml`. |
 | `LOG_LEVEL` | `INFO` | `DEBUG` muestra más en dev. |
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | Bind del FastAPI. |
+| `WEB_CONCURRENCY` | `1` | Procesos uvicorn del API (no confundir con el worker stub). Registry y rate limit son por proceso: límite efectivo hasta N × `RATE_LIMIT_MAX`. Se ignora con `ENV=dev` (reload). |
 | `WORKER_ENABLED` / `WORKER_INTERVAL_SECONDS` | `true` / `10` | Worker stub. |
 | `RATE_LIMIT_WINDOW` / `RATE_LIMIT_MAX` | `60` / `12` | Rate limit por IP+agente. |
 
