@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from westfield_agent_back_python.shared.config import load_config
 
 BASE_YAML = """
@@ -93,3 +95,94 @@ def test_keys_por_agente_vacias_se_ignoran(tmp_path, monkeypatch) -> None:
 
     cfg = load_config(_write_configs(tmp_path))
     assert cfg["openai"]["agent_api_keys"] == {"WESTY": "sk-westy"}
+
+
+# ------------------------------------------------------ workers uvicorn
+
+
+def test_workers_default_es_uno(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 1
+
+
+def test_workers_del_yaml(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 3
+
+
+def test_web_concurrency_pisa_el_yaml(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "4")
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 4
+
+
+def test_web_concurrency_menor_a_uno_se_acota(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "0")
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 1
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_web_concurrency_vacia_cuenta_como_no_seteada(tmp_path, monkeypatch, raw) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", raw)
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 3
+
+
+@pytest.mark.parametrize("raw", ["abc", "2.5", "dos"])
+def test_web_concurrency_invalida_degrada_al_yaml_sin_romper(tmp_path, monkeypatch, raw) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", raw)
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: 3\n"))
+    assert cfg["service"]["workers"] == 3
+
+
+def test_web_concurrency_con_espacios_se_normaliza(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", " 4 ")
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 4
+
+
+def test_workers_invalido_en_yaml_degrada_a_uno(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+
+    cfg = load_config(_write_configs(tmp_path, BASE_YAML + "service:\n  workers: muchos\n"))
+    assert cfg["service"]["workers"] == 1
+
+
+# ------------------------------------------------------ ENV normalizado
+
+
+@pytest.mark.parametrize(("raw", "esperado"), [("Prod", "prod"), (" DEV ", "dev"), ("", "dev")])
+def test_env_se_normaliza_una_sola_vez(tmp_path, monkeypatch, raw, esperado) -> None:
+    monkeypatch.setenv("ENV", raw)
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["project"]["env"] == esperado
+
+
+def test_env_en_mayusculas_carga_el_yaml_del_entorno(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ENV", "Prod")
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+    (tmp_path / "prod.yaml").write_text("service:\n  workers: 2\n", encoding="utf-8")
+
+    cfg = load_config(_write_configs(tmp_path))
+    assert cfg["service"]["workers"] == 2
+
+
+def test_env_ausente_es_dev(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("ENV", raising=False)
+
+    cfg = load_config(
+        _write_configs(tmp_path, BASE_YAML.replace("name: test", "name: test\n  env: prod"))
+    )
+    # La fuente de verdad es ENV (default dev), igual que para elegir el <env>.yaml.
+    assert cfg["project"]["env"] == "dev"

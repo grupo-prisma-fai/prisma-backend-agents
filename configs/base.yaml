@@ -6,6 +6,10 @@ project:
 service:
   host: 0.0.0.0
   port: 8000
+  # Procesos uvicorn (override: WEB_CONCURRENCY). Un proceso satura ~1 core
+  # alrededor de ~1.100 rpm; para holgura sobre 800 rpm usar 2+ en prod.
+  # Registry y rate limit son por proceso. En ENV=dev se fuerza 1 (reload).
+  workers: 1
   # Orígenes permitidos por CORS. "*" permite cualquier origen.
   cors_origins:
     - "*"

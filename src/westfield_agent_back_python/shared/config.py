@@ -23,8 +23,13 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
+from westfield_agent_back_python.shared.logger import get_logger
+
 # Carga .env si existe en el cwd (no falla si no está).
 load_dotenv()
+
+# Después de load_dotenv: get_logger lee LOG_LEVEL al crearse.
+log = get_logger("westfield_agent_back_python.config")
 
 
 def _deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -43,6 +48,38 @@ def _env_bool(key: str, default: bool) -> bool:
     if v is None:
         return default
     return v.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _env_name() -> str:
+    """
+    Entorno normalizado (`ENV`, minúsculas y sin espacios; vacío → "dev").
+
+    Es la ÚNICA lectura de ENV: elige el `<env>.yaml` y queda en
+    `cfg["project"]["env"]`, que es lo que deben consultar los entrypoints.
+    Así `ENV=Prod` y `ENV=prod` se comportan igual en todos lados.
+    """
+    return os.getenv("ENV", "").strip().lower() or "dev"
+
+
+def _env_workers(default: Any) -> int:
+    """
+    Workers uvicorn desde WEB_CONCURRENCY, acotado a >= 1.
+
+    Vacía o en blanco cuenta como no seteada (pasa con `WEB_CONCURRENCY=` en
+    un .env o un compose). Un valor no numérico NO tumba el arranque: degrada
+    al valor del YAML con un 🟡 — mismo criterio que el resto del runtime.
+    """
+    raw = os.getenv("WEB_CONCURRENCY", "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            log.warning(f"🟡 WEB_CONCURRENCY={raw!r} no es un entero → se usa {default}.")
+    try:
+        return max(1, int(default))
+    except (TypeError, ValueError):
+        log.warning(f"🟡 service.workers={default!r} no es un entero → se usa 1.")
+        return 1
 
 
 def _collect_prefixed_env(prefix: str) -> dict[str, str]:
@@ -71,7 +108,7 @@ def load_config(config_dir: str = "configs") -> dict[str, Any]:
     Pydantic Settings acá porque el template ESIC es YAML-first y queremos
     mantener paridad de estructura entre servicios.
     """
-    env = os.getenv("ENV", "dev").lower()
+    env = _env_name()
     base_path = Path(config_dir) / "base.yaml"
     env_path = Path(config_dir) / f"{env}.yaml"
 
@@ -93,20 +130,20 @@ def load_config(config_dir: str = "configs") -> dict[str, Any]:
     cfg.setdefault("rate_limit", {})
 
     # ---- project ----
-    cfg["project"]["env"] = os.getenv("ENV", cfg["project"].get("env", "dev"))
-    cfg["project"]["log_level"] = os.getenv(
-        "LOG_LEVEL", cfg["project"].get("log_level", "INFO")
-    )
+    cfg["project"]["env"] = env
+    cfg["project"]["log_level"] = os.getenv("LOG_LEVEL", cfg["project"].get("log_level", "INFO"))
 
     # ---- service ----
     cfg["service"]["host"] = os.getenv("HOST", cfg["service"].get("host", "0.0.0.0"))
     cfg["service"]["port"] = int(os.getenv("PORT", cfg["service"].get("port", 8000)))
     cfg["service"].setdefault("cors_origins", ["*"])
+    # Procesos uvicorn. WEB_CONCURRENCY es la convención estándar (uvicorn,
+    # gunicorn, Heroku…). Cada worker tiene su propio GIL, así que el techo de
+    # rpm escala con N; ver main_api.py para lo que eso implica.
+    cfg["service"]["workers"] = _env_workers(cfg["service"].get("workers", 1))
 
     # ---- worker ----
-    cfg["worker"]["enabled"] = _env_bool(
-        "WORKER_ENABLED", bool(cfg["worker"].get("enabled", True))
-    )
+    cfg["worker"]["enabled"] = _env_bool("WORKER_ENABLED", bool(cfg["worker"].get("enabled", True)))
     cfg["worker"]["interval_seconds"] = int(
         os.getenv("WORKER_INTERVAL_SECONDS", cfg["worker"].get("interval_seconds", 10))
     )
