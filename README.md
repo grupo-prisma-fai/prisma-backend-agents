@@ -25,7 +25,7 @@ query de cada turno; los documentos los procesa el servicio de ingesta
 
 ```bash
 poetry install                 # crea venv e instala deps (incluye boto3 + faiss-cpu)
-cp .env.example .env           # editar OPENAI_API_KEY + credenciales AWS
+cp .env.example .env           # editar OPENAI_API_KEY (en prod: SECRETS_MANAGER_SECRET_ID)
 make run-api                   # API en localhost:8000
 make run-worker                # Worker (V1 stub no-op)
 make test                      # pytest -v (sin AWS ni red — todo con fakes)
@@ -266,7 +266,8 @@ El fallo de un agente **jamás** afecta a otros agentes de la misma instancia.
 | `S3_BUCKET` | `westfield-agent-knowledge` | Bucket de conocimiento. |
 | `AWS_REGION` | `us-east-1` | Región del bucket. |
 | `S3_PREFIX` | `org={university_code}/agents` | Template multi-tenant; el placeholder se resuelve POR REQUEST con el segmento de la ruta. |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | Cadena estándar de boto3 (o perfil/rol IAM). |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | Cadena estándar de boto3. En EC2 no se usan: credenciales del rol IAM de la instancia. |
+| `SECRETS_MANAGER_SECRET_ID` | (sin default) | Secreto JSON con las `OPENAI_API_KEY*`; se vuelca al entorno al arrancar (no quedan en disco). Si falla la lectura, el proceso no arranca. |
 | `REGISTRY_TTL_SECONDS` | `300` (`30` en dev) | TTL del caché de agentes. |
 | `REGISTRY_NEGATIVE_TTL_SECONDS` | `30` | Caché negativa de agent_ids inexistentes. |
 | `OPENAI_API_KEY` | (sin default) | Key global. Sin esto, agentes openai responden fallback. |
