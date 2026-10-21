@@ -108,7 +108,9 @@ El script publica a `org=${UNIVERSITY_CODE}/agents/<agent_id>/` (default `westfi
 
 ## Configuración
 
-`configs/base.yaml` + `configs/<ENV>.yaml` (deep merge) + **env vars, que siempre ganan** ([shared/config.py](src/westfield_agent_back_python/shared/config.py)). Devuelve un `dict` plano a propósito (paridad con el template ESIC), no un objeto Pydantic Settings. Las API keys vienen **solo** de env; las credenciales AWS ni pasan por acá (cadena estándar de boto3).
+`configs/base.yaml` + `configs/<ENV>.yaml` (deep merge) + **env vars, que siempre ganan** ([shared/config.py](src/westfield_agent_back_python/shared/config.py)). Devuelve un `dict` plano a propósito (paridad con el template ESIC), no un objeto Pydantic Settings. Las API keys vienen **solo** de env; las credenciales AWS ni pasan por acá (cadena estándar de boto3; en EC2, el rol `prisma-agents-ec2`).
+
+**Secretos en producción**: con `SECRETS_MANAGER_SECRET_ID` definida, los launchers (`main_api`, `main_worker`) llaman a [secrets_manager_env.py](src/westfield_agent_back_python/adapters/secrets_manager_env.py) **antes** de `load_config()` y de uvicorn: el JSON del secreto se vuelca a `os.environ` (sin pisar vars ya definidas) y los workers de uvicorn lo heredan. Vive en `adapters/` y no en `config.py` porque `shared/` no importa boto3. Si el secreto no se puede leer, el arranque **se corta** a propósito (arrancar sin keys pondría a todos los agentes en fallback en silencio). Levantar con `uvicorn ...:app` directo se saltea el loader.
 
 `ENV=dev` baja el TTL del registry a 30s y activa `reload` de uvicorn.
 

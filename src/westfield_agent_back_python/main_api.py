@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import uvicorn
 
+from westfield_agent_back_python.adapters.secrets_manager_env import load_secrets_from_env_config
 from westfield_agent_back_python.shared.config import load_config
 from westfield_agent_back_python.shared.logger import get_logger
 
@@ -28,6 +29,9 @@ log = get_logger("westfield_agent_back_python.main_api")
 
 
 def main() -> None:
+    # Antes de load_config y de uvicorn: los workers heredan el entorno del padre.
+    # Si SECRETS_MANAGER_SECRET_ID está y el secreto falla, el arranque se corta.
+    load_secrets_from_env_config()
     cfg = load_config()
     # project.env ya viene normalizado por load_config: misma fuente de verdad
     # que elige el <env>.yaml, así ENV=DEV y ENV=dev no divergen.
